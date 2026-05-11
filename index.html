@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>בטיחות ברשת - גרסה מתוקנת</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@400;700;800&display=swap');
+        
+        :root {
+            --pastel-purple: #E9D5FF;
+            --pastel-blue: #CFFAFE;
+            --dark-blue: #1E3A8A;
+            --dark-pink: #9D174D;
+            --gold: #F59E0B;
+        }
+
+        body {
+            font-family: 'Assistant', sans-serif;
+            background-color: #F8FAFC;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+
+        .game-board {
+            background-color: var(--pastel-purple);
+            padding: 1rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell {
+            background-color: var(--pastel-blue);
+            transition: all 0.2s ease;
+            cursor: pointer;
+            width: 85px;
+            height: 85px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.8rem;
+            font-weight: 800;
+            border-radius: 0.75rem;
+        }
+
+        .cell:hover:not(.taken) {
+            transform: scale(1.02);
+            filter: brightness(0.98);
+        }
+
+        .x-mark { color: var(--dark-blue); }
+        .o-mark { color: var(--dark-pink); }
+
+        .winning-cell {
+            background-color: var(--gold) !important;
+            color: white !important;
+            animation: bounce 0.5s ease;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .modal-bg {
+            background-color: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(6px);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="bg-white p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-md text-center border border-gray-100 z-10">
+        <div class="text-6xl mb-4">📱</div>
+        <h1 class="text-3xl font-extrabold text-blue-900 mb-2">אתגר הגלישה הבטוחה</h1>
+        <p class="text-gray-500 mb-8">סיטואציות אמיתיות לכיתות ד'-ו'</p>
+        
+        <div class="space-y-4 mb-8 text-right">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">שם שחקן 1 (X):</label>
+                <input type="text" id="player1Input" placeholder="הכנס שם..." class="w-full p-3 rounded-xl border-2 border-blue-100 focus:border-blue-400 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">שם שחקן 2 (O):</label>
+                <input type="text" id="player2Input" placeholder="הכנס שם..." class="w-full p-3 rounded-xl border-2 border-pink-100 focus:border-pink-400 outline-none">
+            </div>
+        </div>
+
+        <button onclick="startGame()" class="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-xl hover:bg-blue-700 transition w-full shadow-lg">יצאנו לדרך!</button>
+    </div>
+
+    <!-- Main Game UI -->
+    <div id="gameContainer" class="hidden bg-white p-6 md:p-10 rounded-3xl shadow-2xl w-full max-w-2xl text-center border border-gray-100">
+        <header class="mb-6 flex justify-between items-center px-4">
+            <div class="text-right">
+                <p class="text-xs text-gray-400">התור של:</p>
+                <div id="currentPlayerDisplay" class="text-xl font-bold"></div>
+            </div>
+            <h1 class="text-xl font-black text-blue-900">בטיחות ברשת</h1>
+        </header>
+
+        <div class="flex flex-col items-center gap-6">
+            <div class="game-board grid grid-cols-3 gap-3" id="board">
+                <div data-index="0" class="cell"></div>
+                <div data-index="1" class="cell"></div>
+                <div data-index="2" class="cell"></div>
+                <div data-index="3" class="cell"></div>
+                <div data-index="4" class="cell"></div>
+                <div data-index="5" class="cell"></div>
+                <div data-index="6" class="cell"></div>
+                <div data-index="7" class="cell"></div>
+                <div data-index="8" class="cell"></div>
+            </div>
+
+            <div class="flex justify-around w-full mt-4">
+                <div id="p1Card" class="p-3 rounded-xl border-2 border-blue-200 bg-blue-50 text-blue-900 font-bold w-32 shadow-sm"></div>
+                <div id="p2Card" class="p-3 rounded-xl border-2 border-pink-200 bg-pink-50 text-pink-900 font-bold w-32 shadow-sm"></div>
+            </div>
+            <button onclick="resetToMenu()" class="text-gray-400 hover:text-red-500 text-xs underline mt-2">החלפת שמות</button>
+        </div>
+    </div>
+
+    <!-- Question Modal -->
+    <div id="questionModal" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-40">
+        <div class="bg-white rounded-2xl p-6 md:p-8 max-w-lg w-full shadow-2xl">
+            <div id="modalPlayerName" class="text-sm font-bold text-gray-500 mb-2"></div>
+            <h2 id="questionTitle" class="text-xl font-bold text-gray-800 mb-6 text-right leading-tight border-r-4 border-blue-500 pr-4"></h2>
+            <div id="optionsContainer" class="grid gap-3"></div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedbackModal" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center border-t-8" id="feedbackBorder">
+            <div id="feedbackIcon" class="text-5xl mb-4"></div>
+            <h2 id="feedbackTitle" class="text-2xl font-black mb-3"></h2>
+            <p id="feedbackText" class="text-gray-600 mb-6 leading-relaxed text-right text-lg"></p>
+            <button onclick="closeFeedback()" class="bg-blue-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-black transition w-full shadow-md">המשך במשחק</button>
+        </div>
+    </div>
+
+    <!-- End Game Modal -->
+    <div id="endGameModal" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl p-10 max-w-sm w-full text-center shadow-2xl border-2 border-gold">
+            <div class="text-6xl mb-4" id="endGameIcon">👑</div>
+            <h2 id="endGameTitle" class="text-2xl font-black mb-6"></h2>
+            <button onclick="fullReset()" class="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition w-full shadow-lg">שחק שוב!</button>
+        </div>
+    </div>
+
+    <script>
+        const questPool = [
+            {
+                q: "חבר מהכיתה פתח קבוצת ווטסאפ שקוראים לה 'כולם חוץ מ...(שם של ילד)'. מה תעשה?",
+                options: [
+                    "אצטרף ואהיה בשקט כדי שלא יפתחו קבוצה גם נגדי.",
+                    "אגיד לחבר שזה פוגעני, אצא מהקבוצה ואדווח למבוגר.",
+                    "אכנס רק כדי לראות מה כותבים שם על הילד.",
+                    "אכתוב בקבוצה 'חחח איזה מצחיקים אתם'."
+                ],
+                correct: 1,
+                explanation: "החרמה דיגיטלית היא בריונות לכל דבר. עמידה מהצד נחשבת לשיתוף פעולה עם הפגיעה."
+            },
+            {
+                q: "במשחק רובלוקס, מישהו מציע לך 'שיטה סודית' לקבל חפצים אם תיתן לו את קוד האימות שנשלח לטלפון של ההורים. מה הסיכון?",
+                options: [
+                    "אין סיכון, זה רק קוד של המשחק.",
+                    "הוא יקבל גישה לחשבון של ההורים ויכול לגנוב כסף או פרטים אישיים.",
+                    "הוא יקבל את החפצים שלי אבל יחזיר לי כפול.",
+                    "המשחק פשוט יתנתק לרגע."
+                ],
+                correct: 1,
+                explanation: "קוד אימות (OTP) הוא המפתח לפרטיות. לעולם אין למסור קודים שנשלחים ב-SMS לאף אחד."
+            },
+            {
+                q: "מישהו שאתה מכיר רק מהאינסטגרם שולח לך הודעה: 'ראיתי אותך אתמול בקניון, לבשת חולצה ירוקה'. איך תגיב?",
+                options: [
+                    "אשאל אותו איפה הוא היה כדי שנוכל להיפגש.",
+                    "אחסום אותו מיד ואספר להורים - זה סימן למעקב לא בטוח.",
+                    "אכתוב לו 'נכון! איזה קטע'.",
+                    "אשלח לו תמונה שלי מהקניון כדי שיאמין שזה אני."
+                ],
+                correct: 1,
+                explanation: "כשמישהו זר מציין פרטים על המיקום הפיזי שלכם, זהו סימן אזהרה רציני. אל תמשיכו בשיחה."
+            },
+            {
+                q: "קיבלת הודעה בווטסאפ: 'תעבירו ל-10 אנשים או שחשבון הווטסאפ שלכם ייחסם ב-24:00'. מה תעשה?",
+                options: [
+                    "אעביר מהר ל-10 חברים כדי לא להיחסם.",
+                    "אמחק את ההודעה. מדובר בהודעת שרשרת שקרית שנועדה להלחיץ.",
+                    "אשלח רק למשפחה כי הם יבינו אותי.",
+                    "אכתוב להנהלת ווטסאפ הודעה זועמת."
+                ],
+                correct: 1,
+                explanation: "הודעות שרשרת שמבטיחות פרסים או מאיימות בחסימה הן תמיד שקריות."
+            },
+            {
+                q: "חבר צילם אותך נופל בשיעור ספורט בצורה מצחיקה. הוא רוצה להעלות את זה לטיקטוק. מה הכלל?",
+                options: [
+                    "מותר לו, זה הטלפון שלו.",
+                    "אסור לו להעלות או להפיץ שום תוכן שלי בלי הסכמה מפורשת שלי.",
+                    "מותר לו אם הוא לא כותב את השם שלי.",
+                    "מותר לו רק אם הוא שולח לי את הסרטון קודם."
+                ],
+                correct: 1,
+                explanation: "הזכות לפרטיות פירושה שלכם יש שליטה על התמונה שלכם. צילום והפצה ללא רשות הם פגיעה בפרטיות."
+            },
+            {
+                q: "בזמן משחק אונליין, שחקן אחר מתחיל לקלל אותך במיקרופון כי הפסדתם. איך הכי נכון לפעול?",
+                options: [
+                    "לקלל אותו בחזרה כדי שיראה שאני לא פראייר.",
+                    "להשתיק אותו (Mute), לדווח עליו במערכת המשחק ולהמשיך לשחק.",
+                    "לצאת מהמשחק ולבכות בחדר.",
+                    "לנסות להסביר לו שזה רק משחק."
+                ],
+                correct: 1,
+                explanation: "אין טעם להתווכח עם בריונים. שימוש בכפתור ה-Mute הוא הכלי הכי חזק שלכם."
+            },
+            {
+                q: "אתה רוצה להוריד 'מוד' (Mod) למיינקראפט מאתר לא מוכר. האתר מבקש לכבות אנטי-וירוס. מה תעשה?",
+                options: [
+                    "אכבה לרגע, זה בטח בגלל שהקובץ מיוחד.",
+                    "לא אוריד את הקובץ. בקשה לכבות אנטי-וירוס היא סימן בטוח לוירוס.",
+                    "אבקש מאח שלי הגדול שיכבה את האנטי-וירוס.",
+                    "אוריד את הקובץ במחשב של בית הספר."
+                ],
+                correct: 1,
+                explanation: "אתרים שמבקשים לכבות אנטי-וירוס מנסים להחדיר למחשב שלכם תוכנות זדוניות."
+            }
+        ];
+
+        let currentQuestions = [...questPool];
+        let players = { X: '', O: '' };
+        let currentPlayer = 'X';
+        let gameState = ["", "", "", "", "", "", "", "", ""];
+        let gameActive = false;
+        let pendingCellIndex = null;
+        let lastMoveWinner = null;
+
+        function startGame() {
+            const p1 = document.getElementById('player1Input').value.trim();
+            const p2 = document.getElementById('player2Input').value.trim();
+            if (!p1 || !p2) {
+                alert("אנא הכניסו שמות לשני השחקנים");
+                return;
+            }
+
+            players.X = p1; players.O = p2;
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameContainer').classList.remove('hidden');
+            document.getElementById('p1Card').innerText = p1;
+            document.getElementById('p2Card').innerText = p2;
+            
+            gameActive = true;
+            updateUI();
+        }
+
+        function handleCellClick(e) {
+            const index = parseInt(e.target.getAttribute('data-index'));
+            if (gameState[index] !== "" || !gameActive) return;
+            pendingCellIndex = index;
+            showQuestion();
+        }
+
+        function showQuestion() {
+            if (currentQuestions.length === 0) currentQuestions = [...questPool];
+            
+            const randomIndex = Math.floor(Math.random() * currentQuestions.length);
+            const questionData = currentQuestions[randomIndex];
+            currentQuestions.splice(randomIndex, 1);
+
+            document.getElementById('modalPlayerName').innerText = `שאלה עבור ${players[currentPlayer]}:`;
+            document.getElementById('questionTitle').innerText = questionData.q;
+            
+            const container = document.getElementById('optionsContainer');
+            container.innerHTML = '';
+            
+            const shuffledOptions = questionData.options
+                .map((text, i) => ({ text, isCorrect: i === questionData.correct }))
+                .sort(() => Math.random() - 0.5);
+
+            shuffledOptions.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-right p-4 rounded-xl border-2 border-gray-100 hover:border-blue-400 hover:bg-blue-50 transition text-gray-700 font-medium shadow-sm active:scale-95";
+                btn.innerText = opt.text;
+                btn.onclick = () => processAnswer(opt.isCorrect, questionData.explanation);
+                container.appendChild(btn);
+            });
+
+            document.getElementById('questionModal').classList.remove('hidden');
+        }
+
+        function processAnswer(isCorrect, explanation) {
+            document.getElementById('questionModal').classList.add('hidden');
+            lastMoveWinner = isCorrect ? currentPlayer : (currentPlayer === 'X' ? 'O' : 'X');
+            
+            const title = document.getElementById('feedbackTitle');
+            const text = document.getElementById('feedbackText');
+            const icon = document.getElementById('feedbackIcon');
+            const border = document.getElementById('feedbackBorder');
+
+            if (isCorrect) {
+                title.innerText = "תשובה נכונה!";
+                icon.innerText = "✅";
+                border.style.borderTopColor = "#10b981";
+            } else {
+                title.innerText = "טעות - היזהרו!";
+                icon.innerText = "❌";
+                border.style.borderTopColor = "#ef4444";
+            }
+            text.innerText = explanation + (isCorrect ? "" : ` (המשבצת ניתנת ל-${players[lastMoveWinner]})`);
+            document.getElementById('feedbackModal').classList.remove('hidden');
+        }
+
+        function closeFeedback() {
+            document.getElementById('feedbackModal').classList.add('hidden');
+            gameState[pendingCellIndex] = lastMoveWinner;
+            const cell = document.querySelectorAll('.cell')[pendingCellIndex];
+            cell.innerText = lastMoveWinner;
+            cell.classList.add('taken', lastMoveWinner === 'X' ? 'x-mark' : 'o-mark');
+
+            if (checkWinner()) return;
+            if (!gameState.includes("")) { showEndGame("תיקו!", "🤝"); return; }
+
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            updateUI();
+        }
+
+        function checkWinner() {
+            const winPaths = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for (let path of winPaths) {
+                const [a, b, c] = path;
+                if (gameState[a] && gameState[a] === gameState[b] && gameState[a] === gameState[c]) {
+                    path.forEach(idx => document.querySelectorAll('.cell')[idx].classList.add('winning-cell'));
+                    gameActive = false;
+                    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                    setTimeout(() => showEndGame(`ניצחון ל${players[gameState[a]]}!`, "🏆"), 600);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function updateUI() {
+            const display = document.getElementById('currentPlayerDisplay');
+            display.innerText = `${players[currentPlayer]} (${currentPlayer})`;
+            display.className = `text-xl font-bold ${currentPlayer === 'X' ? 'text-blue-700' : 'text-pink-700'}`;
+            
+            document.getElementById('p1Card').style.opacity = currentPlayer === 'X' ? '1' : '0.4';
+            document.getElementById('p2Card').style.opacity = currentPlayer === 'O' ? '1' : '0.4';
+        }
+
+        function showEndGame(msg, icon) {
+            document.getElementById('endGameTitle').innerText = msg;
+            document.getElementById('endGameIcon').innerText = icon;
+            document.getElementById('endGameModal').classList.remove('hidden');
+        }
+
+        function fullReset() {
+            // איפוס לוגי מלא
+            gameState = ["", "", "", "", "", "", "", "", ""];
+            currentPlayer = 'X';
+            gameActive = true;
+            currentQuestions = [...questPool];
+            
+            // איפוס ויזואלי של הלוח
+            document.querySelectorAll('.cell').forEach(cell => {
+                cell.innerText = "";
+                cell.className = "cell";
+            });
+            
+            // הסתרת מודלים
+            document.getElementById('endGameModal').classList.add('hidden');
+            updateUI();
+        }
+
+        function resetToMenu() {
+            // חזרה להתחלה ממש
+            fullReset();
+            document.getElementById('gameContainer').classList.add('hidden');
+            document.getElementById('startScreen').classList.remove('hidden');
+        }
+
+        document.querySelectorAll('.cell').forEach(cell => cell.addEventListener('click', handleCellClick));
+    </script>
+</body>
+</html>
